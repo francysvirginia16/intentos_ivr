@@ -143,6 +143,7 @@ table.res td.tl{text-align:left;font-family:var(--f);padding-left:14px}
 
     <!-- FILTER PANEL -->
     <div class="filter-panel" id="filter-panel" style="display:none">
+      <div class="filter-row" id="fr-ent"><span class="filter-label">Entidad</span></div>
       <div class="filter-row" id="fr-tramo"><span class="filter-label">Tramo</span></div>
       <div class="filter-row" id="fr-rango"><span class="filter-label">Rango</span></div>
     </div>
@@ -174,7 +175,7 @@ const RANGO_ABBR={'1) MENOR A $5.000':'<$5k','2) $5.001 a $10.000':'$5k-10k','3)
 
 let allRows=[], ENTS=[], TRAMOS=[], RANGOS=[];
 let activeTab='todos', curEnt='ALL';
-let activeTramos=new Set(), activeRangos=new Set();
+let activeEnts=new Set(), activeTramos=new Set(), activeRangos=new Set();
 // Per-entity filters
 let entActiveTramos=new Set(), entActiveRangos=new Set();
 let charts=[];
@@ -202,7 +203,7 @@ async function loadCSV(){
   ENTS=[...new Set(allRows.map(r=>r.entidad))].sort();
   TRAMOS=[...new Set(allRows.map(r=>r.tramo_gestion))].sort((a,b)=>TRAMO_ORDER.indexOf(a)-TRAMO_ORDER.indexOf(b));
   RANGOS=[...new Set(allRows.map(r=>r.rango_deuda))].sort((a,b)=>RANGO_ORDER.indexOf(a)-RANGO_ORDER.indexOf(b));
-  activeTramos=new Set(TRAMOS);activeRangos=new Set(RANGOS);
+  activeEnts=new Set(ENTS);activeTramos=new Set(TRAMOS);activeRangos=new Set(RANGOS);
   entActiveTramos=new Set(TRAMOS);entActiveRangos=new Set(RANGOS);
   buildSidebar();buildFilters();
   curEnt='ALL';sel('ALL');
@@ -271,20 +272,26 @@ function sel(e){
 
 // ── FILTROS GLOBALES ──────────────────────────────────────────────────────────
 function buildFilters(){
+  buildFilterRow('fr-ent',ENTS,activeEnts,'ent',()=>{activeEnts=new Set(ENTS);},null,ENTS_COLORS);
   buildFilterRow('fr-tramo',TRAMOS,activeTramos,'tramo',()=>{activeTramos=new Set(TRAMOS);},TRAMO_ABBR);
   buildFilterRow('fr-rango',RANGOS,activeRangos,'rango',()=>{activeRangos=new Set(RANGOS);},RANGO_ABBR);
 }
 
-function buildFilterRow(containerId,items,activeSet,group,resetFn,abbrMap){
+function buildFilterRow(containerId,items,activeSet,group,resetFn,abbrMap,colors){
   const container=document.getElementById(containerId);
   const btnAll=document.createElement('button');
   btnAll.className='chip reset';btnAll.textContent='Todos';
   btnAll.onclick=()=>{resetFn();syncChips(group,activeSet);if(curEnt==='ALL')renderAll();};
   container.appendChild(btnAll);
-  items.forEach(item=>{
+  items.forEach((item,i)=>{
     const b=document.createElement('button');
     b.className='chip on';b.dataset.val=item;b.dataset.group=group;
     b.textContent=abbrMap?abbrMap[item]||item:item;
+    if(colors){
+      const col=colors[i%colors.length];
+      b.style.borderColor=col;b.style.color=col;b.style.background='rgba(0,0,0,.03)';
+      b.dataset.color=col;
+    }
     b.onclick=()=>{
       if(activeSet.has(item)){if(activeSet.size>1)activeSet.delete(item);}
       else activeSet.add(item);
@@ -297,12 +304,17 @@ function buildFilterRow(containerId,items,activeSet,group,resetFn,abbrMap){
 
 function syncChips(group,set){
   document.querySelectorAll(`[data-group="${group}"]`).forEach(b=>{
-    b.className=set.has(b.dataset.val)?'chip on':'chip';
+    if(b.dataset.color){
+      // entidad: mantener color pero bajar opacidad cuando está off
+      b.style.opacity=set.has(b.dataset.val)?'1':'0.3';
+    } else {
+      b.className=set.has(b.dataset.val)?'chip on':'chip';
+    }
   });
 }
 
 function filteredRows(){
-  return allRows.filter(r=>activeTramos.has(r.tramo_gestion)&&activeRangos.has(r.rango_deuda));
+  return allRows.filter(r=>activeEnts.has(r.entidad)&&activeTramos.has(r.tramo_gestion)&&activeRangos.has(r.rango_deuda));
 }
 
 // ── AGGREGATE ─────────────────────────────────────────────────────────────────
