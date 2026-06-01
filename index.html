@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Dashboard IVR — Intentos por Teléfono</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --bg:#f4f1f2;
+  --s1:#ffffff;
+  --s2:#faf7f8;
+  --s3:#f0eaeb;
+  --bd:#e0d4d6;
+  --green:#1a9e6a;
+  --blue:#c42840;
+  --amber:#d97706;
+  --red:#dc2626;
+  --txt:#1a0d0f;
+  --muted:#8a6068;
+  --dim:#e8dfe0;
+  --f:'DM Sans',sans-serif;
+  --fm:'DM Mono',monospace;
+  --burdo:#8b1c2a;
+  --burdo-light:#c42840;
+  --burdo-bright:#e8304a;
+  --burdo-pale:#fdf0f1;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font-family:var(--f);font-size:12px;height:100vh;display:flex;overflow:hidden}
+.sidebar{width:190px;min-width:190px;background:var(--burdo);border-right:none;display:flex;flex-direction:column;overflow-y:auto}
+.sb-logo{padding:14px 14px 10px;font-size:13px;font-weight:600;color:#fff;border-bottom:1px solid rgba(255,255,255,.15)}
+.sb-logo small{display:block;font-size:10px;font-weight:400;opacity:.6;margin-top:2px}
+.sb-item{padding:9px 14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,.1);border-left:3px solid transparent;transition:all .12s}
+.sb-item:hover{background:rgba(255,255,255,.1)}
+.sb-item.active{background:rgba(255,255,255,.18);border-left-color:#fff}
+.sb-item.active .sb-name{color:#fff;font-weight:600}
+.sb-name{font-size:12px;font-weight:500;display:flex;align-items:center;gap:7px;color:rgba(255,255,255,.85)}
+.sb-val{font-size:10px;font-family:var(--fm);color:rgba(255,255,255,.55)}
+.sb-item.active .sb-val{color:#fff;opacity:.7}
+.sb-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;opacity:.9}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{background:var(--s1);border-bottom:2px solid var(--burdo);padding:12px 20px;flex-shrink:0}
+.topbar-row1{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.topbar-title{font-size:22px;font-weight:600;letter-spacing:-.02em}
+.badge{font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;letter-spacing:.06em}
+.topbar-sub{font-size:12px;color:var(--muted)}
+.kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
+.kpi{background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:12px 16px;position:relative;overflow:hidden}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.kpi.g::before{background:var(--green)}.kpi.b::before{background:linear-gradient(90deg,var(--burdo-light),var(--burdo-bright))}.kpi.a::before{background:var(--amber)}.kpi.r::before{background:var(--red)}
+.kpi-l{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px}
+.kpi-v{font-size:22px;font-weight:600;font-family:var(--fm);line-height:1}
+.kpi-s{font-size:10px;color:var(--muted);margin-top:4px}
+.content{flex:1;overflow:auto;padding:16px 20px}
+.sec-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--burdo);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.sec-label::after{content:'';flex:1;height:1px;background:var(--burdo);opacity:.25}
+.tbl-wrap{overflow-x:auto;border-radius:8px;border:1px solid var(--bd);margin-bottom:16px}
+table.res{width:100%;border-collapse:collapse;font-size:11px;white-space:nowrap}
+table.res thead th{padding:7px 10px;text-align:right;font-size:10px;font-weight:500;color:var(--burdo);text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--bd);background:var(--s2)}
+table.res thead th.tl{text-align:left;padding-left:14px}
+table.res tbody tr{border-bottom:1px solid var(--bd);transition:background .1s}
+table.res tbody tr:hover{background:var(--s2)}
+table.res tbody tr.tot td{background:var(--s3);font-weight:600;border-top:2px solid var(--burdo-light)}
+table.res td{padding:8px 10px;text-align:right;font-family:var(--fm)}
+table.res td.tl{text-align:left;font-family:var(--f);padding-left:14px}
+.en{font-weight:600;font-size:12px}.es{font-size:10px;color:var(--muted);margin-top:1px}
+.bc{display:flex;align-items:center;gap:6px;justify-content:flex-end}
+.bb{width:72px;height:5px;background:var(--dim);border-radius:3px;overflow:hidden;flex-shrink:0}
+.bf{height:100%;border-radius:3px}
+.pt{font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;min-width:42px;text-align:center}
+.seg{display:flex;height:6px;border-radius:3px;overflow:hidden;width:90px}
+/* chips */
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.chip{padding:4px 10px;border-radius:20px;border:1px solid var(--bd);background:none;color:var(--muted);font-size:10px;cursor:pointer;transition:all .12s;font-family:var(--f)}
+.chip:hover{border-color:var(--burdo-light);color:var(--burdo-light)}
+.chip.on{border-color:var(--burdo-light);background:rgba(196,40,64,.15);color:var(--burdo-light);font-weight:600}
+/* export */
+.btn-export{display:flex;align-items:center;gap:5px;padding:6px 14px;border-radius:6px;border:1px solid var(--burdo-light);background:none;color:var(--burdo-light);font-size:11px;font-weight:600;cursor:pointer;transition:all .12s;font-family:var(--f);margin-left:auto}
+.btn-export:hover{background:var(--burdo-light);color:#fff}
+/* layout doble col */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.card{background:var(--s1);border:1px solid var(--bd);border-radius:8px;padding:14px 16px}
+.card-title{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--burdo);margin-bottom:12px}
+canvas{max-height:220px}
+/* pill contacto/sin */
+.pill-c{background:#dcfce7;color:#166534;font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px}
+.pill-s{background:#fee2e2;color:#991b1b;font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px}
+.pill-n{background:#fef9c3;color:#854d0e;font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px}
+</style>
+</head>
+<body>
+
+<div class="sidebar" id="sidebar"></div>
+
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-row1">
+      <div class="topbar-title" id="topbar-title">Dashboard IVR</div>
+      <span class="badge" style="background:rgba(139,28,42,.12);color:var(--burdo)">INTENTOS POR TELÉFONO</span>
+      <button class="btn-export" onclick="exportXLSX()">⬇ Exportar XLSX</button>
+    </div>
+    <div class="topbar-sub" id="topbar-sub">Cargando datos…</div>
+    <div class="kpi-row" id="kpi-row"></div>
+  </div>
+
+  <div class="content" id="content">
+    <div id="chips-tramo" class="chips"></div>
+    <div class="grid2" id="charts-area"></div>
+    <div class="sec-label">Detalle por Adjudicación y Rango de Deuda</div>
+    <div style="margin-bottom:8px;display:flex;gap:6px;align-items:center">
+      <span style="font-size:10px;color:var(--muted)">Apertura:</span>
+      <span id="tab-todos" class="chip on" onclick="setTab('todos')">Todos</span>
+      <span id="tab-contactado" class="chip" onclick="setTab('contactado')">Contactado</span>
+      <span id="tab-sin" class="chip" onclick="setTab('sin_contacto')">Sin Contacto</span>
+    </div>
+    <div class="tbl-wrap"><table class="res" id="main-table">
+      <thead id="thead"></thead>
+      <tbody id="tbody"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<script>
+// ─── DATA ────────────────────────────────────────────────────────────────────
+const CSV_URL = 'telefonos.csv';
+let allRows = [], activeEnt = null, activeTramos = new Set(), activeTab = 'todos';
+const ENTITY_COLORS = ['#c42840','#1a9e6a','#d97706','#6366f1','#0ea5e9','#f43f5e','#10b981','#f59e0b','#8b5cf6','#14b8a6','#ef4444','#22c55e','#eab308','#3b82f6'];
+
+function fmt(n){return n==null?'—':n.toLocaleString('es-AR')}
+function pct(a,b){if(!b)return '—';return (a/b*100).toFixed(1)+'%'}
+function num(s){return parseInt(s)||0}
+
+async function loadCSV(){
+  const r = await fetch(CSV_URL);
+  const txt = await r.text();
+  const lines = txt.trim().split('\n');
+  const headers = parseCSVLine(lines[0]);
+  allRows = lines.slice(1).map(l=>{
+    const vals = parseCSVLine(l);
+    const o={};
+    headers.forEach((h,i)=>o[h.trim()]=vals[i]||'0');
+    return o;
+  });
+  init();
+}
+
+function parseCSVLine(line){
+  const res=[];let cur='',inQ=false;
+  for(let i=0;i<line.length;i++){
+    const c=line[i];
+    if(c==='"'){inQ=!inQ;}
+    else if(c===','&&!inQ){res.push(cur);cur='';}
+    else{cur+=c;}
+  }
+  res.push(cur);
+  return res;
+}
+
+function init(){
+  const entidades = [...new Set(allRows.map(r=>r.entidad))].sort();
+  activeEnt = entidades[0];
+  renderSidebar(entidades);
+  renderAll();
+}
+
+function renderSidebar(entidades){
+  const sb = document.getElementById('sidebar');
+  sb.innerHTML = `<div class="sb-logo">BML Collections<small>IVR Dashboard</small></div>`;
+  entidades.forEach((e,i)=>{
+    const rows = allRows.filter(r=>r.entidad===e);
+    const tot = rows.reduce((a,r)=>a+num(r.telefonos_total),0);
+    const ivrs = rows.reduce((a,r)=>a+num(r.ivrs_total),0);
+    const div = document.createElement('div');
+    div.className = 'sb-item'+(e===activeEnt?' active':'');
+    div.innerHTML = `<div class="sb-name"><span class="sb-dot" style="background:${ENTITY_COLORS[i%ENTITY_COLORS.length]}"></span>${e}</div><div class="sb-val">${fmt(tot)}</div>`;
+    div.onclick=()=>{activeEnt=e;activeTramos=new Set();document.querySelectorAll('.sb-item').forEach(x=>x.classList.remove('active'));div.classList.add('active');renderAll();};
+    sb.appendChild(div);
+  });
+}
+
+function getRows(){
+  let rows = allRows.filter(r=>r.entidad===activeEnt);
+  if(activeTramos.size>0) rows=rows.filter(r=>activeTramos.has(r.tramo_gestion));
+  return rows;
+}
+
+function renderAll(){
+  const rows = getRows();
+  const all = allRows.filter(r=>r.entidad===activeEnt);
+  renderTopbar(rows);
+  renderTramoChips(all);
+  renderCharts(rows);
+  renderTable(rows);
+}
+
+function renderTopbar(rows){
+  const adj = [...new Set(rows.map(r=>r.codigo_adjudicacion))];
+  document.getElementById('topbar-title').textContent = `Dashboard IVR — ${activeEnt}`;
+  document.getElementById('topbar-sub').textContent = `${adj.length} adjudicacion${adj.length!==1?'es':''} · Datos al ${new Date().toLocaleDateString('es-AR')}`;
+
+  const totTel = rows.reduce((a,r)=>a+num(r.telefonos_total),0);
+  const conTel = rows.reduce((a,r)=>a+num(r.telefonos_contactados),0);
+  const sinTel = rows.reduce((a,r)=>a+num(r.telefonos_sin_contacto),0);
+  const totIvr = rows.reduce((a,r)=>a+num(r.ivrs_total),0);
+  const sinIvr = rows.reduce((a,r)=>a+num(r.telefonos_sin_ivr_total),0);
+  const avgIvr = totTel>0?(totIvr/totTel).toFixed(1):'—';
+
+  document.getElementById('kpi-row').innerHTML = `
+    <div class="kpi b"><div class="kpi-l">Teléfonos Total</div><div class="kpi-v">${fmt(totTel)}</div><div class="kpi-s">universo del portfolio</div></div>
+    <div class="kpi g"><div class="kpi-l">Contactados</div><div class="kpi-v">${fmt(conTel)}</div><div class="kpi-s">${pct(conTel,totTel)} del total</div></div>
+    <div class="kpi r"><div class="kpi-l">Sin Contacto</div><div class="kpi-v">${fmt(sinTel)}</div><div class="kpi-s">${pct(sinTel,totTel)} del total</div></div>
+    <div class="kpi a"><div class="kpi-l">IVRs Totales</div><div class="kpi-v">${fmt(totIvr)}</div><div class="kpi-s">intentos acumulados</div></div>
+    <div class="kpi b"><div class="kpi-l">Promedio IVR/Tel</div><div class="kpi-v">${avgIvr}</div><div class="kpi-s">${fmt(sinIvr)} sin ningún IVR</div></div>
+  `;
+}
+
+function renderTramoChips(all){
+  const tramos = [...new Set(all.map(r=>r.tramo_gestion))].sort();
+  const wrap = document.getElementById('chips-tramo');
+  wrap.innerHTML = '';
+  const allChip = document.createElement('span');
+  allChip.className='chip'+(activeTramos.size===0?' on':'');
+  allChip.textContent='Todos los tramos';
+  allChip.onclick=()=>{activeTramos=new Set();renderAll();};
+  wrap.appendChild(allChip);
+  tramos.forEach(t=>{
+    const c=document.createElement('span');
+    c.className='chip'+(activeTramos.has(t)?' on':'');
+    c.textContent=t;
+    c.onclick=()=>{if(activeTramos.has(t)){activeTramos.delete(t);}else{activeTramos.add(t);}renderAll();};
+    wrap.appendChild(c);
+  });
+}
+
+// Destruir charts anteriores
+let chartInstances = {};
+function destroyCharts(){Object.values(chartInstances).forEach(c=>{try{c.destroy();}catch(e){}});chartInstances={};}
+
+function renderCharts(rows){
+  destroyCharts();
+  const area = document.getElementById('charts-area');
+
+  // totales por bucket IVR
+  const s0 = rows.reduce((a,r)=>a+num(r.telefonos_sin_ivr_total),0);
+  const s1 = rows.reduce((a,r)=>a+num(r.telefonos_1_a_3_ivrs_total),0);
+  const s2 = rows.reduce((a,r)=>a+num(r.telefonos_4_a_6_ivrs_total),0);
+  const s3 = rows.reduce((a,r)=>a+num(r.telefonos_mayor_6_ivrs_total),0);
+
+  // contactado vs sin por bucket
+  const c0=rows.reduce((a,r)=>a+num(r.contactado_sin_ivr),0);
+  const c1=rows.reduce((a,r)=>a+num(r.contactado_1_a_3_ivrs),0);
+  const c2=rows.reduce((a,r)=>a+num(r.contactado_4_a_6_ivrs),0);
+  const c3=rows.reduce((a,r)=>a+num(r.contactado_mayor_6_ivrs),0);
+  const sc0=rows.reduce((a,r)=>a+num(r.sin_contacto_sin_ivr),0);
+  const sc1=rows.reduce((a,r)=>a+num(r.sin_contacto_1_a_3_ivrs),0);
+  const sc2=rows.reduce((a,r)=>a+num(r.sin_contacto_4_a_6_ivrs),0);
+  const sc3=rows.reduce((a,r)=>a+num(r.sin_contacto_mayor_6_ivrs),0);
+
+  area.innerHTML = `
+    <div class="card"><div class="card-title">Distribución de Teléfonos por Intentos IVR</div><canvas id="c1"></canvas></div>
+    <div class="card"><div class="card-title">Contactado vs Sin Contacto por Tramo IVR</div><canvas id="c2"></canvas></div>
+  `;
+
+  const labels = ['Sin IVR','1–3 IVRs','4–6 IVRs','>6 IVRs'];
+  const totales = [s0,s1,s2,s3];
+  const colores = ['#94a3b8','#f59e0b','#f43f5e','#8b1c2a'];
+
+  chartInstances.c1 = new Chart(document.getElementById('c1'),{
+    type:'bar',
+    data:{labels,datasets:[{label:'Teléfonos',data:totales,backgroundColor:colores,borderRadius:4,borderSkipped:false}]},
+    options:{responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${fmt(ctx.raw)} tel. (${pct(ctx.raw,totales.reduce((a,b)=>a+b,0))})`}}},scales:{y:{grid:{color:'rgba(0,0,0,.05)'},ticks:{font:{family:'DM Mono',size:10},callback:v=>fmt(v)}},x:{grid:{display:false},ticks:{font:{family:'DM Sans',size:10}}}}}
+  });
+
+  chartInstances.c2 = new Chart(document.getElementById('c2'),{
+    type:'bar',
+    data:{labels,datasets:[
+      {label:'Contactado',data:[c0,c1,c2,c3],backgroundColor:'#1a9e6a',borderRadius:4,borderSkipped:false},
+      {label:'Sin Contacto',data:[sc0,sc1,sc2,sc3],backgroundColor:'#f43f5e',borderRadius:4,borderSkipped:false}
+    ]},
+    options:{responsive:true,plugins:{legend:{labels:{font:{family:'DM Sans',size:10},boxWidth:10}},tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${fmt(ctx.raw)}`}}},scales:{x:{stacked:true,grid:{display:false},ticks:{font:{family:'DM Sans',size:10}}},y:{stacked:true,grid:{color:'rgba(0,0,0,.05)'},ticks:{font:{family:'DM Mono',size:10},callback:v=>fmt(v)}}}}
+  });
+}
+
+function setTab(tab){
+  activeTab=tab;
+  ['todos','contactado','sin'].forEach(t=>{
+    document.getElementById('tab-'+t).className='chip'+(t===tab||(tab==='sin_contacto'&&t==='sin')?'chip on':'chip');
+  });
+  // fix active class
+  document.getElementById('tab-todos').className='chip'+(tab==='todos'?' on':'');
+  document.getElementById('tab-contactado').className='chip'+(tab==='contactado'?' on':'');
+  document.getElementById('tab-sin').className='chip'+(tab==='sin_contacto'?' on':'');
+  renderTable(getRows());
+}
+
+function renderTable(rows){
+  // Agrupa por adjudicacion + rango_deuda
+  const map = {};
+  rows.forEach(r=>{
+    const key = r.codigo_adjudicacion+'||'+r.rango_deuda;
+    if(!map[key]) map[key]={
+      adj:r.codigo_adjudicacion, rango:r.rango_deuda,
+      tel:0, con:0, sin:0,
+      s0:0,s1:0,s2:0,s3:0,
+      c_s0:0,c_s1:0,c_s2:0,c_s3:0,
+      sc_s0:0,sc_s1:0,sc_s2:0,sc_s3:0,
+      ivr:0
+    };
+    const m=map[key];
+    m.tel+=num(r.telefonos_total);m.con+=num(r.telefonos_contactados);m.sin+=num(r.telefonos_sin_contacto);
+    m.s0+=num(r.telefonos_sin_ivr_total);m.s1+=num(r.telefonos_1_a_3_ivrs_total);m.s2+=num(r.telefonos_4_a_6_ivrs_total);m.s3+=num(r.telefonos_mayor_6_ivrs_total);
+    m.c_s0+=num(r.contactado_sin_ivr);m.c_s1+=num(r.contactado_1_a_3_ivrs);m.c_s2+=num(r.contactado_4_a_6_ivrs);m.c_s3+=num(r.contactado_mayor_6_ivrs);
+    m.sc_s0+=num(r.sin_contacto_sin_ivr);m.sc_s1+=num(r.sin_contacto_1_a_3_ivrs);m.sc_s2+=num(r.sin_contacto_4_a_6_ivrs);m.sc_s3+=num(r.sin_contacto_mayor_6_ivrs);
+    m.ivr+=num(r.ivrs_total);
+  });
+
+  const data = Object.values(map).sort((a,b)=>a.adj.localeCompare(b.adj)||a.rango.localeCompare(b.rango));
+  const tab = activeTab;
+
+  // Totales
+  const tot = {tel:0,con:0,sin:0,s0:0,s1:0,s2:0,s3:0,c_s0:0,c_s1:0,c_s2:0,c_s3:0,sc_s0:0,sc_s1:0,sc_s2:0,sc_s3:0,ivr:0};
+  data.forEach(d=>Object.keys(tot).forEach(k=>tot[k]+=d[k]||0));
+
+  const thead = document.getElementById('thead');
+  const tbody = document.getElementById('tbody');
+
+  if(tab==='todos'){
+    thead.innerHTML=`<tr>
+      <th class="tl">Adjudicación</th><th class="tl">Rango Deuda</th>
+      <th>Teléfonos</th><th>Contactados</th><th>Sin Contacto</th><th>% Contacto</th>
+      <th>Sin IVR</th><th>1–3 IVRs</th><th>4–6 IVRs</th><th>&gt;6 IVRs</th>
+      <th>IVRs Total</th><th>Prom IVR/Tel</th><th>Distribución IVR</th>
+    </tr>`;
+    tbody.innerHTML = data.map(d=>`<tr>
+      <td class="tl"><div class="en">${d.adj}</div></td>
+      <td class="tl"><div class="es">${d.rango}</div></td>
+      <td>${fmt(d.tel)}</td>
+      <td style="color:var(--green)">${fmt(d.con)}</td>
+      <td style="color:var(--red)">${fmt(d.sin)}</td>
+      <td><span class="${d.con/d.tel>.5?'pill-c':d.con/d.tel>.2?'pill-n':'pill-s'}">${pct(d.con,d.tel)}</span></td>
+      <td style="color:var(--muted)">${fmt(d.s0)}</td>
+      <td>${fmt(d.s1)}</td>
+      <td>${fmt(d.s2)}</td>
+      <td style="color:var(--burdo);font-weight:600">${fmt(d.s3)}</td>
+      <td style="font-weight:600">${fmt(d.ivr)}</td>
+      <td>${d.tel?((d.ivr/d.tel).toFixed(1)):'—'}</td>
+      <td>${segBar(d)}</td>
+    </tr>`).join('')+totRow(tot,tab);
+  } else if(tab==='contactado'){
+    thead.innerHTML=`<tr>
+      <th class="tl">Adjudicación</th><th class="tl">Rango Deuda</th>
+      <th>Contactados</th>
+      <th>Sin IVR</th><th>1–3 IVRs</th><th>4–6 IVRs</th><th>&gt;6 IVRs</th>
+      <th>% &gt;6 IVRs</th><th>Distribución</th>
+    </tr>`;
+    tbody.innerHTML = data.map(d=>`<tr>
+      <td class="tl"><div class="en">${d.adj}</div></td>
+      <td class="tl"><div class="es">${d.rango}</div></td>
+      <td style="color:var(--green);font-weight:600">${fmt(d.con)}</td>
+      <td style="color:var(--muted)">${fmt(d.c_s0)}</td>
+      <td>${fmt(d.c_s1)}</td>
+      <td>${fmt(d.c_s2)}</td>
+      <td style="color:var(--burdo);font-weight:600">${fmt(d.c_s3)}</td>
+      <td><span class="${d.c_s3/d.con>.5?'pill-s':d.c_s3/d.con>.2?'pill-n':'pill-c'}">${pct(d.c_s3,d.con)}</span></td>
+      <td>${segBarC(d)}</td>
+    </tr>`).join('')+totRow(tot,tab);
+  } else {
+    thead.innerHTML=`<tr>
+      <th class="tl">Adjudicación</th><th class="tl">Rango Deuda</th>
+      <th>Sin Contacto</th>
+      <th>Sin IVR</th><th>1–3 IVRs</th><th>4–6 IVRs</th><th>&gt;6 IVRs</th>
+      <th>% &gt;6 IVRs</th><th>Distribución</th>
+    </tr>`;
+    tbody.innerHTML = data.map(d=>`<tr>
+      <td class="tl"><div class="en">${d.adj}</div></td>
+      <td class="tl"><div class="es">${d.rango}</div></td>
+      <td style="color:var(--red);font-weight:600">${fmt(d.sin)}</td>
+      <td style="color:var(--muted)">${fmt(d.sc_s0)}</td>
+      <td>${fmt(d.sc_s1)}</td>
+      <td>${fmt(d.sc_s2)}</td>
+      <td style="color:var(--burdo);font-weight:600">${fmt(d.sc_s3)}</td>
+      <td><span class="${d.sc_s3/d.sin>.5?'pill-s':d.sc_s3/d.sin>.2?'pill-n':'pill-c'}">${pct(d.sc_s3,d.sin)}</span></td>
+      <td>${segBarSC(d)}</td>
+    </tr>`).join('')+totRow(tot,tab);
+  }
+}
+
+function segBar(d){
+  const t=d.tel||1;
+  const w0=d.s0/t*100,w1=d.s1/t*100,w2=d.s2/t*100,w3=d.s3/t*100;
+  return `<div class="seg"><div style="width:${w0}%;background:#94a3b8"></div><div style="width:${w1}%;background:#f59e0b"></div><div style="width:${w2}%;background:#f43f5e"></div><div style="width:${w3}%;background:#8b1c2a"></div></div>`;
+}
+function segBarC(d){
+  const t=d.con||1;
+  const w0=d.c_s0/t*100,w1=d.c_s1/t*100,w2=d.c_s2/t*100,w3=d.c_s3/t*100;
+  return `<div class="seg"><div style="width:${w0}%;background:#94a3b8"></div><div style="width:${w1}%;background:#f59e0b"></div><div style="width:${w2}%;background:#f43f5e"></div><div style="width:${w3}%;background:#8b1c2a"></div></div>`;
+}
+function segBarSC(d){
+  const t=d.sin||1;
+  const w0=d.sc_s0/t*100,w1=d.sc_s1/t*100,w2=d.sc_s2/t*100,w3=d.sc_s3/t*100;
+  return `<div class="seg"><div style="width:${w0}%;background:#94a3b8"></div><div style="width:${w1}%;background:#f59e0b"></div><div style="width:${w2}%;background:#f43f5e"></div><div style="width:${w3}%;background:#8b1c2a"></div></div>`;
+}
+
+function totRow(t,tab){
+  if(tab==='todos') return `<tr class="tot">
+    <td class="tl" colspan="2">TOTAL</td>
+    <td>${fmt(t.tel)}</td><td>${fmt(t.con)}</td><td>${fmt(t.sin)}</td>
+    <td>${pct(t.con,t.tel)}</td>
+    <td>${fmt(t.s0)}</td><td>${fmt(t.s1)}</td><td>${fmt(t.s2)}</td><td>${fmt(t.s3)}</td>
+    <td>${fmt(t.ivr)}</td><td>${t.tel?(t.ivr/t.tel).toFixed(1):'—'}</td><td></td>
+  </tr>`;
+  if(tab==='contactado') return `<tr class="tot">
+    <td class="tl" colspan="2">TOTAL</td>
+    <td>${fmt(t.con)}</td>
+    <td>${fmt(t.c_s0)}</td><td>${fmt(t.c_s1)}</td><td>${fmt(t.c_s2)}</td><td>${fmt(t.c_s3)}</td>
+    <td>${pct(t.c_s3,t.con)}</td><td></td>
+  </tr>`;
+  return `<tr class="tot">
+    <td class="tl" colspan="2">TOTAL</td>
+    <td>${fmt(t.sin)}</td>
+    <td>${fmt(t.sc_s0)}</td><td>${fmt(t.sc_s1)}</td><td>${fmt(t.sc_s2)}</td><td>${fmt(t.sc_s3)}</td>
+    <td>${pct(t.sc_s3,t.sin)}</td><td></td>
+  </tr>`;
+}
+
+function exportXLSX(){
+  const rows = getRows();
+  const data = [Object.keys(rows[0])].concat(rows.map(r=>Object.values(r)));
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'IVR_'+activeEnt);
+  XLSX.writeFile(wb, `ivr_${activeEnt}_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+// ─── START ───────────────────────────────────────────────────────────────────
+loadCSV().catch(e=>{
+  document.getElementById('topbar-sub').textContent = 'Error cargando CSV: '+e.message;
+});
+</script>
+</body>
+</html>
