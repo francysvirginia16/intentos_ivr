@@ -426,7 +426,7 @@ function setTabClass(tab){
 function renderAll(){
   charts.forEach(c=>{try{c.destroy();}catch(e){}});charts=[];
   const rows=filteredRows();
-  const t=updateKPIs(rows,'Todas las entidades',`${rows.length} filas · ${new Date().toLocaleDateString('es-AR')}`);
+  const t=updateKPIs(rows,'Todas las entidades','');
   updateBucketCards(t,activeTab);
 
   if(activeTab==='todos'){
