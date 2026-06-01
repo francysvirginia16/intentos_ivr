@@ -127,6 +127,7 @@ table.res td.tl{text-align:left;font-family:var(--f);padding-left:14px}
       <div class="topbar-title" id="mTitle">Dashboard IVR</div>
       <span class="badge" id="mBadge"></span>
       <span class="topbar-sub" id="mSub"></span>
+      <span style="font-size:11px;color:var(--muted)" id="csvDate"></span>
     </div>
     <div class="kpi-row">
       <div class="kpi b"><div class="kpi-l">Teléfonos Total</div><div class="kpi-v" id="kv-tel">—</div><div class="kpi-s">universo del portfolio</div></div>
@@ -436,8 +437,10 @@ function renderAll(){
 }
 
 function renderAllTodos(rows,t){
+  const byEnt  =aggByKey(rows,r=>r.entidad,(a,b)=>a._key.localeCompare(b._key));
   const byTramo=aggByKey(rows,r=>r.tramo_gestion,(a,b)=>TRAMO_ORDER.indexOf(a._key)-TRAMO_ORDER.indexOf(b._key));
   const byRango=aggByKey(rows,r=>r.rango_deuda,(a,b)=>RANGO_ORDER.indexOf(a._key)-RANGO_ORDER.indexOf(b._key));
+  byEnt.forEach(d=>d.pct=d.tel?Math.round(d.con/d.tel*1000)/10:0);
   byTramo.forEach(d=>d.pct=d.tel?Math.round(d.con/d.tel*1000)/10:0);
   byRango.forEach(d=>d.pct=d.tel?Math.round(d.con/d.tel*1000)/10:0);
   t.pct=t.tel?Math.round(t.con/t.tel*1000)/10:0;
@@ -451,9 +454,18 @@ function renderAllTodos(rows,t){
     <span>Hacé clic en una entidad para ver el detalle</span>
   </div>`;
 
+  // Filas de entidad con onclick para navegar al detalle
+  const entRows=byEnt.map(d=>`<tr style="cursor:pointer" onclick="sel('${d._key}')">${ivrRowInner(d._key,'',d,t)}</tr>`).join('');
+
   document.getElementById('cnt').innerHTML=`
     ${legend}
     <div class="tbl-header">
+      <div class="sec-label">Por Entidad</div>
+      <button class="xl-btn" onclick="exportXL('ent','todos')">⬇ Excel</button>
+    </div>
+    <div class="tbl-wrap"><table class="res">${ivrHead()}<tbody>${entRows}${ivrTot(t)}</tbody></table></div>
+
+    <div class="tbl-header" style="margin-top:4px">
       <div class="sec-label">Por Tramo de Gestión</div>
       <button class="xl-btn" onclick="exportXL('tramo','todos')">⬇ Excel</button>
     </div>
@@ -655,10 +667,9 @@ function ivrHead(){
   </tr></thead>`;
 }
 
-function ivrRow(label,sub,d,tot){
+function ivrRowInner(label,sub,d,tot){
   const pc=d.pct||0;const tt=d.tel||1;
-  return`<tr>
-    <td class="tl"><div class="en">${label}</div>${sub?`<div class="es">${sub}</div>`:''}</td>
+  return`<td class="tl"><div class="en">${label}</div>${sub?`<div class="es">${sub}</div>`:''}</td>
     <td>${fmt(d.tel)}</td>
     <td style="color:var(--green)">${fmt(d.con)}${p2(d.con,tot.con)}</td>
     <td style="color:var(--red)">${fmt(d.sin)}${p2(d.sin,tot.sin)}</td>
@@ -674,8 +685,10 @@ function ivrRow(label,sub,d,tot){
       <div style="width:${d.s1/tt*100}%;background:#f59e0b"></div>
       <div style="width:${d.s2/tt*100}%;background:#f43f5e"></div>
       <div style="width:${d.s3/tt*100}%;background:#8b1c2a"></div>
-    </div></td>
-  </tr>`;
+    </div></td>`;
+}
+function ivrRow(label,sub,d,tot){
+  return`<tr>${ivrRowInner(label,sub,d,tot)}</tr>`;
 }
 
 function ivrTot(t){
@@ -719,9 +732,9 @@ function makeStackedBar(canvasId,labels,data){
 function exportXL(type,tab){
   const rows=filteredRows();
   let data;
-  if(type==='tramo'||type==='rango'){
-    const keyFn=type==='tramo'?r=>r.tramo_gestion:r=>r.rango_deuda;
-    const sortFn=type==='tramo'?(a,b)=>TRAMO_ORDER.indexOf(a._key)-TRAMO_ORDER.indexOf(b._key):(a,b)=>RANGO_ORDER.indexOf(a._key)-RANGO_ORDER.indexOf(b._key);
+  if(type==='ent'||type==='tramo'||type==='rango'){
+    const keyFn=type==='ent'?r=>r.entidad:type==='tramo'?r=>r.tramo_gestion:r=>r.rango_deuda;
+    const sortFn=type==='ent'?(a,b)=>a._key.localeCompare(b._key):type==='tramo'?(a,b)=>TRAMO_ORDER.indexOf(a._key)-TRAMO_ORDER.indexOf(b._key):(a,b)=>RANGO_ORDER.indexOf(a._key)-RANGO_ORDER.indexOf(b._key);
     data=aggByKey(rows,keyFn,sortFn).map(d=>({
       'Grupo':d._key,'Teléfonos':d.tel,'Contactados':d.con,'Sin Contacto':d.sin,
       'Sin IVR':d.s0,'1-3 IVRs':d.s1,'4-6 IVRs':d.s2,'>6 IVRs':d.s3,'IVRs Total':d.ivr
@@ -763,6 +776,19 @@ document.getElementById('cnt').innerHTML=`
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite"><circle cx="12" cy="12" r="10" opacity=".25"/><path d="M12 2a10 10 0 0 1 10 10"/></svg>
     <span>Cargando datos…</span>
   </div>`;
+
+// Fecha de última actualización del CSV desde GitHub API
+fetch('https://api.github.com/repos/francysvirginia16/intentos_ivr/commits?path=telefonos.csv&per_page=1')
+  .then(r=>r.json())
+  .then(data=>{
+    if(data&&data[0]&&data[0].commit&&data[0].commit.committer&&data[0].commit.committer.date){
+      const d=new Date(data[0].commit.committer.date);
+      const dateStr=d.toLocaleString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+      const el=document.getElementById('csvDate');
+      if(el) el.innerHTML=`· <span style="color:var(--burdo);font-weight:500">Actualizado: ${dateStr}</span>`;
+    }
+  })
+  .catch(()=>{});
 
 loadCSV().catch(e=>{
   document.getElementById('cnt').innerHTML=`<div style="text-align:center;padding:40px;color:var(--red)"><b>Error al cargar CSV:</b> ${e.message}</div>`;
