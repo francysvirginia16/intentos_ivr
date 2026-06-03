@@ -256,11 +256,13 @@ function sel(e){
   charts.forEach(c=>{try{c.destroy();}catch(x){}});charts=[];
 
   if(e==='ALL'){
-    // Mostrar filtros globales, ocultar tabs
     document.getElementById('filter-panel').style.display='';
     document.getElementById('tab-bar').style.display='';
     activeTab='todos';
     setTabClass('todos');
+    // Restaurar todos los filtros al volver a la vista global
+    activeEnts=new Set(ENTS);activeTramos=new Set(TRAMOS);activeRangos=new Set(RANGOS);
+    syncChips('ent');syncChips('tramo');syncChips('rango');
     renderAll();
   } else {
     // Vista entidad: ocultar filtros globales (tiene los propios), ocultar tabs
@@ -272,17 +274,29 @@ function sel(e){
 }
 
 // ── FILTROS GLOBALES ──────────────────────────────────────────────────────────
-function buildFilters(){
-  buildFilterRow('fr-ent',ENTS,activeEnts,'ent',()=>{activeEnts=new Set(ENTS);},null,ENTS_COLORS);
-  buildFilterRow('fr-tramo',TRAMOS,activeTramos,'tramo',()=>{activeTramos=new Set(TRAMOS);},TRAMO_ABBR);
-  buildFilterRow('fr-rango',RANGOS,activeRangos,'rango',()=>{activeRangos=new Set(RANGOS);},RANGO_ABBR);
+function getActiveSet(group){
+  return group==='ent'?activeEnts:group==='tramo'?activeTramos:activeRangos;
+}
+function getAllItems(group){
+  return group==='ent'?ENTS:group==='tramo'?TRAMOS:RANGOS;
 }
 
-function buildFilterRow(containerId,items,activeSet,group,resetFn,abbrMap,colors){
+function buildFilters(){
+  buildFilterRow('fr-ent',  ENTS,   'ent',   ENTS_COLORS, null);
+  buildFilterRow('fr-tramo',TRAMOS, 'tramo', null,        TRAMO_ABBR);
+  buildFilterRow('fr-rango',RANGOS, 'rango', null,        RANGO_ABBR);
+}
+
+function buildFilterRow(containerId,items,group,colors,abbrMap){
   const container=document.getElementById(containerId);
   const btnAll=document.createElement('button');
   btnAll.className='chip reset';btnAll.textContent='Todos';
-  btnAll.onclick=()=>{resetFn();syncChips(group,activeSet);if(curEnt==='ALL')renderAll();};
+  btnAll.onclick=()=>{
+    const set=getActiveSet(group);
+    getAllItems(group).forEach(i=>set.add(i));
+    syncChips(group);
+    if(curEnt==='ALL') renderAll();
+  };
   container.appendChild(btnAll);
   items.forEach((item,i)=>{
     const b=document.createElement('button');
@@ -294,22 +308,26 @@ function buildFilterRow(containerId,items,activeSet,group,resetFn,abbrMap,colors
       b.dataset.color=col;
     }
     b.onclick=()=>{
-      if(activeSet.has(item)){if(activeSet.size>1)activeSet.delete(item);}
-      else activeSet.add(item);
-      syncChips(group,activeSet);
-      if(curEnt==='ALL')renderAll();
+      const set=getActiveSet(group);
+      if(set.has(item)){if(set.size>1) set.delete(item);}
+      else set.add(item);
+      syncChips(group);
+      if(curEnt==='ALL') renderAll();
     };
     container.appendChild(b);
   });
 }
 
-function syncChips(group,set){
+function syncChips(group){
+  const set=getActiveSet(group);
   document.querySelectorAll(`[data-group="${group}"]`).forEach(b=>{
+    const on=set.has(b.dataset.val);
     if(b.dataset.color){
-      // entidad: mantener color pero bajar opacidad cuando está off
-      b.style.opacity=set.has(b.dataset.val)?'1':'0.3';
+      b.style.opacity=on?'1':'0.3';
+      // borde y texto apagados cuando off
+      b.style.borderColor=on?b.dataset.color:'var(--bd)';
     } else {
-      b.className=set.has(b.dataset.val)?'chip on':'chip';
+      b.className=on?'chip on':'chip';
     }
   });
 }
