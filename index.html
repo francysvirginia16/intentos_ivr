@@ -260,8 +260,6 @@ function sel(e){
     document.getElementById('tab-bar').style.display='';
     activeTab='todos';
     setTabClass('todos');
-    // Restaurar todos los filtros al volver a la vista global
-    activeEnts=new Set(ENTS);activeTramos=new Set(TRAMOS);activeRangos=new Set(RANGOS);
     syncChips('ent');syncChips('tramo');syncChips('rango');
     renderAll();
   } else {
