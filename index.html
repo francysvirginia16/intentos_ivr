@@ -129,11 +129,13 @@ table.res td.tl{text-align:left;font-family:var(--f);padding-left:14px}
       <span class="topbar-sub" id="mSub"></span>
       <span style="font-size:11px;color:var(--muted)" id="csvDate"></span>
     </div>
-    <div class="kpi-row">
+    <div class="kpi-row" style="grid-template-columns:repeat(7,1fr)">
       <div class="kpi b"><div class="kpi-l">Teléfonos Total</div><div class="kpi-v" id="kv-tel">—</div><div class="kpi-s">universo del portfolio</div></div>
       <div class="kpi g"><div class="kpi-l">Contactados</div><div class="kpi-v" id="kv-con" style="color:var(--green)">—</div><div class="kpi-s" id="kv-pcon">—</div></div>
       <div class="kpi r"><div class="kpi-l">Sin Contacto</div><div class="kpi-v" id="kv-sin" style="color:var(--red)">—</div><div class="kpi-s" id="kv-psin">—</div></div>
       <div class="kpi a"><div class="kpi-l">IVRs Totales</div><div class="kpi-v" id="kv-ivr">—</div><div class="kpi-s">intentos acumulados</div></div>
+      <div class="kpi g"><div class="kpi-l">IVRs a Contactados</div><div class="kpi-v" id="kv-ivr-con" style="color:var(--green)">—</div><div class="kpi-s" id="kv-pivr-con">—</div></div>
+      <div class="kpi r"><div class="kpi-l">IVRs a Sin Contacto</div><div class="kpi-v" id="kv-ivr-sin" style="color:var(--red)">—</div><div class="kpi-s" id="kv-pivr-sin">—</div></div>
       <div class="kpi b"><div class="kpi-l">Promedio IVR/Tel</div><div class="kpi-v" id="kv-avg">—</div><div class="kpi-s" id="kv-sivr">—</div></div>
     </div>
   </div>
@@ -388,6 +390,10 @@ function updateKPIs(rows,title,sub){
   document.getElementById('kv-sin').textContent=fmt(t.sin);
   document.getElementById('kv-psin').textContent=pct(t.sin,t.tel)+' del total';
   document.getElementById('kv-ivr').textContent=fmt(t.ivr);
+  document.getElementById('kv-ivr-con').textContent=fmt(t.ivr_con_total);
+  document.getElementById('kv-pivr-con').textContent=pct(t.ivr_con_total,t.ivr)+' del total IVR';
+  document.getElementById('kv-ivr-sin').textContent=fmt(t.ivr_sin_total);
+  document.getElementById('kv-pivr-sin').textContent=pct(t.ivr_sin_total,t.ivr)+' del total IVR';
   document.getElementById('kv-avg').textContent=t.tel?(t.ivr/t.tel).toFixed(1):'—';
   document.getElementById('kv-sivr').textContent=`Con: ${t.ivr_con.toFixed(1)} · S/C: ${t.ivr_sin.toFixed(1)}`;
   return t;
