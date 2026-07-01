@@ -266,7 +266,7 @@ function sel(e){
     // Vista entidad: ocultar filtros globales (tiene los propios), ocultar tabs
     document.getElementById('filter-panel').style.display='none';
     document.getElementById('tab-bar').style.display='none';
-    entActiveTramos=new Set(TRAMOS);entActiveRangos=new Set(RANGOS);
+    entActiveTramos=new Set(TRAMOS);entActiveRangos=new Set(RANGOS);entActiveSegs=new Set();
     renderEnt(e);
   }
 }
@@ -336,7 +336,7 @@ function filteredRows(){
 
 // ── AGGREGATE ─────────────────────────────────────────────────────────────────
 function agg(rows){
-  return {
+  const r={
     tel:rows.reduce((a,r)=>a+num(r.telefonos_total),0),
     con:rows.reduce((a,r)=>a+num(r.telefonos_contactados),0),
     sin:rows.reduce((a,r)=>a+num(r.telefonos_sin_contacto),0),
@@ -353,7 +353,13 @@ function agg(rows){
     sc2:rows.reduce((a,r)=>a+num(r.sin_contacto_4_a_6_ivrs),0),
     sc3:rows.reduce((a,r)=>a+num(r.sin_contacto_mayor_6_ivrs),0),
     ivr:rows.reduce((a,r)=>a+num(r.ivrs_total),0),
+    ivr_con_total:rows.reduce((a,r)=>a+num(r.ivrs_tel_contactados),0),
+    ivr_sin_total:rows.reduce((a,r)=>a+num(r.ivrs_tel_sin_contacto),0),
   };
+  // Intensidad real desde columnas del CSV
+  r.ivr_con = r.con>0 ? r.ivr_con_total/r.con : 0;
+  r.ivr_sin = r.sin>0 ? r.ivr_sin_total/r.sin : 0;
+  return r;
 }
 
 function aggByKey(rows,keyFn,sortFn){
@@ -383,7 +389,7 @@ function updateKPIs(rows,title,sub){
   document.getElementById('kv-psin').textContent=pct(t.sin,t.tel)+' del total';
   document.getElementById('kv-ivr').textContent=fmt(t.ivr);
   document.getElementById('kv-avg').textContent=t.tel?(t.ivr/t.tel).toFixed(1):'—';
-  document.getElementById('kv-sivr').textContent=fmt(t.s0)+' sin ningún IVR';
+  document.getElementById('kv-sivr').textContent=`Con: ${t.ivr_con.toFixed(1)} · S/C: ${t.ivr_sin.toFixed(1)}`;
   return t;
 }
 
@@ -580,10 +586,22 @@ function renderAllApertura(rows,t,tab){
 }
 
 // ── RENDER ENTIDAD (detalle) ───────────────────────────────────────────────────
+let entActiveSegs=new Set();
+
 function renderEnt(en){
   const idx=ENTS.indexOf(en);
   const entRows=allRows.filter(r=>r.entidad===en);
-  const filtRows=entRows.filter(r=>entActiveTramos.has(r.tramo_gestion)&&entActiveRangos.has(r.rango_deuda));
+
+  // Segmentos solo para MEL0
+  const SEGS=[...new Set(entRows.map(r=>r.segmento||'').filter(s=>s!=''))].sort();
+  const isMEL0=(en==='MEL0');
+  if(isMEL0&&entActiveSegs.size===0) entActiveSegs=new Set(SEGS);
+
+  const filtRows=entRows.filter(r=>
+    entActiveTramos.has(r.tramo_gestion)&&
+    entActiveRangos.has(r.rango_deuda)&&
+    (!isMEL0||entActiveSegs.has(r.segmento||''))
+  );
   const t=updateKPIs(filtRows,en,`${fmt(filtRows.reduce((a,r)=>a+num(r.telefonos_total),0))} teléfonos`);
   updateBucketCards(t,'todos');
 
@@ -596,6 +614,11 @@ function renderEnt(en){
   // filtros por entidad
   const tramoChips=TRAMOS.map(t=>`<button class="chip${entActiveTramos.has(t)?' on':''}" data-ent-tramo="${t}" onclick="toggleEntTramo('${t}','${en}')">${TRAMO_ABBR[t]||t}</button>`).join('');
   const rangoChips=RANGOS.map(r=>`<button class="chip${entActiveRangos.has(r)?' on':''}" data-ent-rango="${r}" onclick="toggleEntRango('${r}','${en}')">${RANGO_ABBR[r]||r}</button>`).join('');
+  const segRow=isMEL0?`<div class="filter-row">
+    <span class="filter-label">Segmento</span>
+    <button class="chip reset" onclick="selectAllEntSegs('${en}')">Todos</button>
+    ${SEGS.map(s=>`<button class="chip${entActiveSegs.has(s)?' on':''}" data-ent-seg="${s}" onclick="toggleEntSeg('${s}','${en}')">Seg. ${s}</button>`).join('')}
+  </div>`:'';
 
   const filterBar=`<div class="filter-panel" style="margin-bottom:14px">
     <div class="filter-row">
@@ -608,6 +631,7 @@ function renderEnt(en){
       <button class="chip reset" onclick="selectAllEntRangos('${en}')">Todos</button>
       ${rangoChips}
     </div>
+    ${segRow}
   </div>`;
 
   const legend=`<div class="legend">
@@ -641,6 +665,22 @@ function renderEnt(en){
     charts.push(makeStackedBar('cET',byTramo.map(d=>TRAMO_ABBR[d._key]||d._key),byTramo));
     charts.push(makeStackedBar('cER',byRango.map(d=>RANGO_ABBR[d._key]||d._key),byRango));
   },50);
+}
+
+function toggleEntSeg(s,en){
+  if(entActiveSegs.has(s)){if(entActiveSegs.size>1)entActiveSegs.delete(s);}
+  else entActiveSegs.add(s);
+  document.querySelectorAll('[data-ent-seg]').forEach(b=>b.className=entActiveSegs.has(b.dataset.entSeg)?'chip on':'chip');
+  charts.forEach(c=>{try{c.destroy();}catch(e){}});charts=[];
+  renderEnt(en);
+}
+function selectAllEntSegs(en){
+  const entRows=allRows.filter(r=>r.entidad===en);
+  const SEGS=[...new Set(entRows.map(r=>r.segmento||'').filter(s=>s!=''))].sort();
+  entActiveSegs=new Set(SEGS);
+  document.querySelectorAll('[data-ent-seg]').forEach(b=>b.className='chip on');
+  charts.forEach(c=>{try{c.destroy();}catch(e){}});charts=[];
+  renderEnt(en);
 }
 
 function toggleEntTramo(t,en){
@@ -679,12 +719,18 @@ function ivrHead(){
     <th style="color:#d97706">1–3 IVRs</th>
     <th style="color:#f43f5e">4–6 IVRs</th>
     <th style="color:var(--burdo)">&gt;6 IVRs</th>
-    <th>IVRs Total</th><th>Prom/Tel</th><th class="tl">Dist. IVR</th>
+    <th>IVRs Total</th>
+    <th>Prom/Tel</th>
+    <th style="color:var(--green)">Prom Con.</th>
+    <th style="color:var(--red)">Prom S/C</th>
+    <th class="tl">Dist. IVR</th>
   </tr></thead>`;
 }
 
 function ivrRowInner(label,sub,d,tot){
   const pc=d.pct||0;const tt=d.tel||1;
+  const promCon=d.ivr_con!=null?d.ivr_con.toFixed(1):'—';
+  const promSin=d.ivr_sin!=null?d.ivr_sin.toFixed(1):'—';
   return`<td class="tl"><div class="en">${label}</div>${sub?`<div class="es">${sub}</div>`:''}</td>
     <td>${fmt(d.tel)}</td>
     <td style="color:var(--green)">${fmt(d.con)}${p2(d.con,tot.con)}</td>
@@ -696,6 +742,8 @@ function ivrRowInner(label,sub,d,tot){
     <td style="color:var(--burdo);font-weight:600">${fmt(d.s3)}${p2(d.s3,tot.s3)}</td>
     <td style="font-weight:600">${fmt(d.ivr)}</td>
     <td>${d.tel?(d.ivr/d.tel).toFixed(1):'—'}</td>
+    <td style="color:var(--green)">${promCon}</td>
+    <td style="color:var(--red)">${promSin}</td>
     <td><div class="seg">
       <div style="width:${d.s0/tt*100}%;background:#94a3b8"></div>
       <div style="width:${d.s1/tt*100}%;background:#f59e0b"></div>
@@ -709,6 +757,8 @@ function ivrRow(label,sub,d,tot){
 
 function ivrTot(t){
   const pc=t.pct||0;const tt=t.tel||1;
+  const promCon=t.ivr_con!=null?t.ivr_con.toFixed(1):'—';
+  const promSin=t.ivr_sin!=null?t.ivr_sin.toFixed(1):'—';
   return`<tr class="tot"><td class="tl">TOTAL</td>
     <td>${fmt(t.tel)}</td>
     <td style="color:var(--green)">${fmt(t.con)}</td>
@@ -720,6 +770,8 @@ function ivrTot(t){
     <td style="color:var(--burdo);font-weight:700">${fmt(t.s3)}</td>
     <td style="font-weight:700">${fmt(t.ivr)}</td>
     <td>${t.tel?(t.ivr/t.tel).toFixed(1):'—'}</td>
+    <td style="color:var(--green);font-weight:700">${promCon}</td>
+    <td style="color:var(--red);font-weight:700">${promSin}</td>
     <td><div class="seg">
       <div style="width:${t.s0/tt*100}%;background:#94a3b8"></div>
       <div style="width:${t.s1/tt*100}%;background:#f59e0b"></div>
