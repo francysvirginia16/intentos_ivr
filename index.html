@@ -139,8 +139,8 @@ table.res td.tl{text-align:left;font-family:var(--f);padding-left:14px}
   </div>
 
   <div class="content">
-    <!-- BUCKET CARDS — siempre visibles -->
-    <div class="bucket-grid" id="bucket-cards"></div>
+    <!-- BUCKET CARDS + INTENSIDAD — siempre visibles -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr) repeat(2,1fr);gap:12px;margin-bottom:18px" id="bucket-cards"></div>
 
     <!-- FILTER PANEL -->
     <div class="filter-panel" id="filter-panel" style="display:none">
@@ -266,7 +266,7 @@ function sel(e){
     // Vista entidad: ocultar filtros globales (tiene los propios), ocultar tabs
     document.getElementById('filter-panel').style.display='none';
     document.getElementById('tab-bar').style.display='none';
-    entActiveTramos=new Set(TRAMOS);entActiveRangos=new Set(RANGOS);entActiveSegs=new Set();
+    entActiveTramos=new Set(TRAMOS);entActiveRangos=new Set(RANGOS);entActiveSegs=new Set();entTab='todos';
     renderEnt(e);
   }
 }
@@ -393,9 +393,8 @@ function updateKPIs(rows,title,sub){
   return t;
 }
 
-// ── BUCKET CARDS (siempre visibles, se recalculan) ────────────────────────────
+// ── BUCKET CARDS + INTENSIDAD (siempre visibles, se recalculan) ──────────────
 function updateBucketCards(t,tab){
-  // Según tab: todos = s0..s3, contactado = c0..c3, sin = sc0..sc3
   const isAll=(tab==='todos'), isCon=(tab==='contactado');
   const v0=isAll?t.s0:isCon?t.c0:t.sc0;
   const v1=isAll?t.s1:isCon?t.c1:t.sc1;
@@ -403,6 +402,12 @@ function updateBucketCards(t,tab){
   const v3=isAll?t.s3:isCon?t.c3:t.sc3;
   const base=isAll?t.tel:isCon?t.con:t.sin;
   const modeLabel=isAll?'del total':isCon?'de contactados':'de sin contacto';
+  const promCon=t.ivr_con>0?t.ivr_con.toFixed(1):'—';
+  const promSin=t.ivr_sin>0?t.ivr_sin.toFixed(1):'—';
+  // Escala para barras de intensidad (max visual = 20)
+  const maxInt=20;
+  const pCon=Math.min(t.ivr_con/maxInt*100,100);
+  const pSin=Math.min(t.ivr_sin/maxInt*100,100);
 
   document.getElementById('bucket-cards').innerHTML=`
     <div class="bk" style="background:rgba(148,163,184,.06);border-color:rgba(148,163,184,.3)">
@@ -428,6 +433,18 @@ function updateBucketCards(t,tab){
       <div class="bk-val" style="color:var(--burdo)">${fmt(v3)}</div>
       <div class="bk-sub" style="color:var(--muted)">${base?(v3/base*100).toFixed(1):0}% ${modeLabel}</div>
       <div class="bk-bar"><div class="bk-bar-fill" style="width:${base?(v3/base*100):0}%;background:#8b1c2a"></div></div>
+    </div>
+    <div class="bk" style="background:rgba(26,158,106,.06);border-color:rgba(26,158,106,.3)">
+      <div class="bk-label" style="color:var(--green)">Intensidad Contactados</div>
+      <div class="bk-val" style="color:var(--green);font-size:28px">${promCon}</div>
+      <div class="bk-sub" style="color:var(--green)">IVRs prom. por tel. contactado</div>
+      <div class="bk-bar"><div class="bk-bar-fill" style="width:${pCon}%;background:var(--green)"></div></div>
+    </div>
+    <div class="bk" style="background:rgba(220,38,38,.06);border-color:rgba(220,38,38,.3)">
+      <div class="bk-label" style="color:var(--red)">Intensidad Sin Contacto</div>
+      <div class="bk-val" style="color:var(--red);font-size:28px">${promSin}</div>
+      <div class="bk-sub" style="color:var(--red)">IVRs prom. por tel. sin contacto</div>
+      <div class="bk-bar"><div class="bk-bar-fill" style="width:${pSin}%;background:var(--red)"></div></div>
     </div>`;
 }
 
@@ -641,30 +658,125 @@ function renderEnt(en){
     <span><span class="ldot" style="background:#8b1c2a"></span>&gt;6 IVRs</span>
   </div>`;
 
-  document.getElementById('cnt').innerHTML=`
-    ${filterBar}
-    ${legend}
-    <div class="tbl-header">
-      <div class="sec-label">Por Tramo de Gestión</div>
-      <button class="xl-btn" onclick="exportXLEnt('${en}','tramo')">⬇ Excel</button>
-    </div>
-    <div class="tbl-wrap"><table class="res">${ivrHead()}<tbody>${byTramo.map(d=>ivrRow(d._key,'',d,t)).join('')}${ivrTot(t)}</tbody></table></div>
+  const tabBar=`<div class="tab-bar">
+    <span class="tab${entTab==='todos'?' on':''}" onclick="setEntTab('todos','${en}')">Todos</span>
+    <span class="tab${entTab==='contactado'?' on':''}" onclick="setEntTab('contactado','${en}')">Contactado</span>
+    <span class="tab${entTab==='sin_contacto'?' on':''}" onclick="setEntTab('sin_contacto','${en}')">Sin Contacto</span>
+  </div>`;
 
-    <div class="tbl-header" style="margin-top:4px">
-      <div class="sec-label">Por Rango de Deuda</div>
-      <button class="xl-btn" onclick="exportXLEnt('${en}','rango')">⬇ Excel</button>
-    </div>
-    <div class="tbl-wrap"><table class="res">${ivrHead()}<tbody>${byRango.map(d=>ivrRow(d._key,'',d,t)).join('')}${ivrTot(t)}</tbody></table></div>
+  if(entTab==='todos'){
+    document.getElementById('cnt').innerHTML=`
+      ${filterBar}
+      ${tabBar}
+      ${legend}
+      <div class="tbl-header">
+        <div class="sec-label">Por Tramo de Gestión</div>
+        <button class="xl-btn" onclick="exportXLEnt('${en}','tramo')">⬇ Excel</button>
+      </div>
+      <div class="tbl-wrap"><table class="res">${ivrHead()}<tbody>${byTramo.map(d=>ivrRow(d._key,'',d,t)).join('')}${ivrTot(t)}</tbody></table></div>
+      <div class="tbl-header" style="margin-top:4px">
+        <div class="sec-label">Por Rango de Deuda</div>
+        <button class="xl-btn" onclick="exportXLEnt('${en}','rango')">⬇ Excel</button>
+      </div>
+      <div class="tbl-wrap"><table class="res">${ivrHead()}<tbody>${byRango.map(d=>ivrRow(d._key,'',d,t)).join('')}${ivrTot(t)}</tbody></table></div>
+      <div class="ch-row" style="margin-top:4px">
+        <div class="chb"><div class="cht">IVR por Tramo</div><canvas id="cET" height="180"></canvas></div>
+        <div class="chb"><div class="cht">IVR por Rango</div><canvas id="cER" height="180"></canvas></div>
+      </div>`;
+    setTimeout(()=>{
+      charts.push(makeStackedBar('cET',byTramo.map(d=>TRAMO_ABBR[d._key]||d._key),byTramo));
+      charts.push(makeStackedBar('cER',byRango.map(d=>RANGO_ABBR[d._key]||d._key),byRango));
+    },50);
+  } else {
+    document.getElementById('cnt').innerHTML=`
+      ${filterBar}
+      ${tabBar}
+      ${entAperturaHTML(filtRows,t,entTab,en)}`;
+  }
+}
 
-    <div class="ch-row" style="margin-top:4px">
-      <div class="chb"><div class="cht">IVR por Tramo</div><canvas id="cET" height="180"></canvas></div>
-      <div class="chb"><div class="cht">IVR por Rango</div><canvas id="cER" height="180"></canvas></div>
-    </div>`;
+function entAperturaHTML(rows,t,tab,en){
+  const isCon=(tab==='contactado');
+  const k0=isCon?'c0':'sc0',k1=isCon?'c1':'sc1',k2=isCon?'c2':'sc2',k3=isCon?'c3':'sc3';
+  const colorMain=isCon?'var(--green)':'var(--red)';
+  const map={};
+  rows.forEach(r=>{
+    const key=r.tramo_gestion+'||'+r.rango_deuda;
+    if(!map[key]) map[key]={tramo:r.tramo_gestion,rango:r.rango_deuda,...agg([])};
+    const m=map[key],a=agg([r]);
+    Object.keys(a).forEach(k=>m[k]+=a[k]);
+  });
+  const data=Object.values(map).sort((a,b)=>TRAMO_ORDER.indexOf(a.tramo)-TRAMO_ORDER.indexOf(b.tramo)||RANGO_ORDER.indexOf(a.rango)-RANGO_ORDER.indexOf(b.rango));
 
-  setTimeout(()=>{
-    charts.push(makeStackedBar('cET',byTramo.map(d=>TRAMO_ABBR[d._key]||d._key),byTramo));
-    charts.push(makeStackedBar('cER',byRango.map(d=>RANGO_ABBR[d._key]||d._key),byRango));
-  },50);
+  const thead=`<thead><tr>
+    <th class="tl">Tramo</th><th class="tl">Rango Deuda</th>
+    <th style="color:${colorMain}">${isCon?'Contactados':'Sin Contacto'}</th>
+    <th style="color:#64748b">Sin IVR</th>
+    <th style="color:#d97706">1–3 IVRs</th>
+    <th style="color:#f43f5e">4–6 IVRs</th>
+    <th style="color:var(--burdo)">&gt;6 IVRs</th>
+    <th>% &gt;6</th>
+    <th style="color:${colorMain}">Prom IVR</th>
+    <th class="tl">Dist.</th>
+  </tr></thead>`;
+
+  const trows=data.map(d=>{
+    const base=isCon?d.con:d.sin;
+    const dv0=d[k0],dv1=d[k1],dv2=d[k2],dv3=d[k3];
+    const pGt6=base?(dv3/base*100).toFixed(1):0;
+    const t2=base||1;
+    const prom=isCon?(d.ivr_con>0?d.ivr_con.toFixed(1):'—'):(d.ivr_sin>0?d.ivr_sin.toFixed(1):'—');
+    return`<tr>
+      <td class="tl"><div class="es">${TRAMO_ABBR[d.tramo]||d.tramo}</div></td>
+      <td class="tl"><div class="es">${RANGO_ABBR[d.rango]||d.rango}</div></td>
+      <td style="color:${colorMain};font-weight:600">${fmt(base)}</td>
+      <td style="color:#64748b">${fmt(dv0)}</td>
+      <td style="color:#d97706">${fmt(dv1)}</td>
+      <td style="color:#f43f5e">${fmt(dv2)}</td>
+      <td style="color:var(--burdo);font-weight:600">${fmt(dv3)}</td>
+      <td><span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;background:${parseFloat(pGt6)>50?'#fee2e2':parseFloat(pGt6)>25?'#fef9c3':'#dcfce7'};color:${parseFloat(pGt6)>50?'#991b1b':parseFloat(pGt6)>25?'#854d0e':'#166534'}">${pGt6}%</span></td>
+      <td style="color:${colorMain};font-weight:600">${prom}</td>
+      <td><div class="seg">
+        <div style="width:${dv0/t2*100}%;background:#94a3b8"></div>
+        <div style="width:${dv1/t2*100}%;background:#f59e0b"></div>
+        <div style="width:${dv2/t2*100}%;background:#f43f5e"></div>
+        <div style="width:${dv3/t2*100}%;background:#8b1c2a"></div>
+      </div></td>
+    </tr>`;
+  }).join('');
+
+  const totBase=isCon?t.con:t.sin;
+  const tv0=t[k0],tv1=t[k1],tv2=t[k2],tv3=t[k3];
+  const tGt6=totBase?(tv3/totBase*100).toFixed(1):0;
+  const ttt=totBase||1;
+  const totProm=isCon?(t.ivr_con>0?t.ivr_con.toFixed(1):'—'):(t.ivr_sin>0?t.ivr_sin.toFixed(1):'—');
+  const totrow=`<tr class="tot">
+    <td class="tl" colspan="2">TOTAL</td>
+    <td style="color:${colorMain}">${fmt(totBase)}</td>
+    <td>${fmt(tv0)}</td><td>${fmt(tv1)}</td><td>${fmt(tv2)}</td>
+    <td style="color:var(--burdo);font-weight:700">${fmt(tv3)}</td>
+    <td>${tGt6}%</td>
+    <td style="color:${colorMain};font-weight:700">${totProm}</td>
+    <td><div class="seg">
+      <div style="width:${tv0/ttt*100}%;background:#94a3b8"></div>
+      <div style="width:${tv1/ttt*100}%;background:#f59e0b"></div>
+      <div style="width:${tv2/ttt*100}%;background:#f43f5e"></div>
+      <div style="width:${tv3/ttt*100}%;background:#8b1c2a"></div>
+    </div></td>
+  </tr>`;
+
+  return`<div class="tbl-header">
+    <div class="sec-label">${isCon?'Contactados':'Sin Contacto'} por Tramo · Rango</div>
+    <button class="xl-btn" onclick="exportXLEnt('${en}','${tab}')">⬇ Excel</button>
+  </div>
+  <div class="tbl-wrap"><table class="res">${thead}<tbody>${trows}${totrow}</tbody></table></div>`;
+}
+
+let entTab='todos';
+function setEntTab(tab,en){
+  entTab=tab;
+  charts.forEach(c=>{try{c.destroy();}catch(e){}});charts=[];
+  renderEnt(en);
 }
 
 function toggleEntSeg(s,en){
